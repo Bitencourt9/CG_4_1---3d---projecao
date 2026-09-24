@@ -9,9 +9,10 @@ public class MainClass {
 		
 		JFrame f = new JFrame();
 		f.setSize(640, 480);
+		f.getContentPane().add(meuCanvas); // adiciona antes de mostrar a janela
 		f.setVisible(true);
-		f.getContentPane().add(meuCanvas);
-		
+		meuCanvas.requestFocusInWindow(); // teclas vao direto para o painel
+
 	
 		f.addWindowListener(new WindowAdapter() {
 		    @Override
