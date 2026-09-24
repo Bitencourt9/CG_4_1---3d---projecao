@@ -25,13 +25,40 @@ public class Triangulo3D {
 		Ponto3D pb1 = modelview.multiplicaPonto(pb);
 		Ponto3D pc1 = modelview.multiplicaPonto(pc);
 		
-		Ponto3D pa2 = projection.multiplicaPonto(pa1);
-		Ponto3D pb2 = projection.multiplicaPonto(pb1);
-		Ponto3D pc2 = projection.multiplicaPonto(pc1);
-		
-		dbg.drawLine((int)pa2.x,(int)pa2.y,(int)pb2.x,(int)pb2.y);
-		dbg.drawLine((int)pb2.x,(int)pb2.y,(int)pc2.x,(int)pc2.y);
-		dbg.drawLine((int)pc2.x,(int)pc2.y,(int)pa2.x,(int)pa2.y);
+		desenhaAresta(dbg, projection, pa1, pb1);
+		desenhaAresta(dbg, projection, pb1, pc1);
+		desenhaAresta(dbg, projection, pc1, pa1);
+	}
+
+	// Menor w aceito antes da divisao. Na perspectiva, w = (z+d)/d, entao
+	// w <= 0 significa ponto atras do centro de projecao (sairia invertido na tela)
+	static final float W_MINIMO = 0.1f;
+
+	private void desenhaAresta(Graphics2D dbg, Mat4x4 projection, Ponto3D a, Ponto3D b) {
+		float wa = projection.calculaW(a);
+		float wb = projection.calculaW(b);
+
+		if (wa < W_MINIMO && wb < W_MINIMO) {
+			return; // aresta inteira atras do centro de projecao
+		}
+		// recorta a parte da aresta que fica atras do centro de projecao
+		if (wa < W_MINIMO) {
+			a = interpola(a, b, (W_MINIMO - wa) / (wb - wa));
+		} else if (wb < W_MINIMO) {
+			b = interpola(b, a, (W_MINIMO - wb) / (wa - wb));
+		}
+
+		Ponto3D a2 = projection.multiplicaPonto(a);
+		Ponto3D b2 = projection.multiplicaPonto(b);
+
+		dbg.drawLine((int)a2.x,(int)a2.y,(int)b2.x,(int)b2.y);
+	}
+
+	private Ponto3D interpola(Ponto3D a, Ponto3D b, float t) {
+		return new Ponto3D(a.x + (b.x - a.x)*t,
+				a.y + (b.y - a.y)*t,
+				a.z + (b.z - a.z)*t,
+				a.w + (b.w - a.w)*t);
 	}
 	
 	public void translacao(float a,float b, float c) {

@@ -116,7 +116,26 @@ public class Mat4x4 {
 		
 		mat[3][3] = 1;
 	}
-	
+
+	// Matriz de perspectiva (Foley e Van Dam): centro de projecao em (0,0,-d),
+	// plano de projecao em z=0. Resulta em xp = d*x/(z+d), yp = d*y/(z+d), zp = 0
+	public void setPerspectiveProjection(float d) {
+		zera();
+
+		mat[0][0] = 1;
+		mat[1][1] = 1;
+
+		mat[2][2] = 0;
+
+		mat[3][2] = 1/d;
+		mat[3][3] = 1;
+	}
+
+	// Coordenada homogenea w do ponto transformado, antes da divisao
+	public float calculaW(Ponto3D p) {
+		return mat[3][0]*p.x +mat[3][1]*p.y +mat[3][2]*p.z +mat[3][3]*p.w;
+	}
+
 	public Ponto3D multiplicaPonto(Ponto3D p) {
 		float x1 = mat[0][0]*p.x +mat[0][1]*p.y +mat[0][2]*p.z +mat[0][3]*p.w;
 		float y1 = mat[1][0]*p.x +mat[1][1]*p.y +mat[1][2]*p.z +mat[1][3]*p.w;

@@ -3,6 +3,8 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.awt.event.MouseEvent;
@@ -48,6 +50,7 @@ public class MainCanvas extends JPanel implements Runnable{
 	int fps = 0;
 	
 	Font f = new Font("", Font.PLAIN, 30);
+	Font fAjuda = new Font("", Font.PLAIN, 14);
 	
 	int clickX = 0;
 	int clickY = 0;
@@ -88,7 +91,11 @@ public class MainCanvas extends JPanel implements Runnable{
 	
 	Mat4x4 projecao;
 	Mat4x4 modelview;
-	
+
+	String nomeProjecao = "Paralela";
+	boolean perspectiva = false;
+	float distanciaPerspectiva = 500; // d: distancia do centro de projecao ao plano z=0
+
 	public MainCanvas() {
 		
 		File f = new File("imgbmp.bmp");
@@ -98,9 +105,11 @@ public class MainCanvas extends JPanel implements Runnable{
 			byte todosodbytes[] = new byte[64000];
 			int byteslidos = fin.read(todosodbytes);
 			System.out.println("Bytes Lidos "+byteslidos);
-			for(int i = 0; i < byteslidos;i++) {
-				System.out.println(i+": "+todosodbytes[i]);
-			}
+			// imprimir os 64000 bytes atrasava a abertura da janela em ~15s
+			//for(int i = 0; i < byteslidos;i++) {
+			//	System.out.println(i+": "+todosodbytes[i]);
+			//}
+			fin.close();
 		} catch (FileNotFoundException e1) {
 			e1.printStackTrace();
 		} catch (IOException e1) {
@@ -208,14 +217,40 @@ public class MainCanvas extends JPanel implements Runnable{
 					Mat4x4 mr = modelview.multiplicaMatrizes(matrot,modelview);
 					modelview = mr;
 				}
+				if (key == KeyEvent.VK_SPACE) {
+					modelview.setIdentity(); // volta a cena para a posicao inicial
+				}
+				// aceita tambem os numeros do teclado numerico
+				if (key >= KeyEvent.VK_NUMPAD1 && key <= KeyEvent.VK_NUMPAD4) {
+					key = KeyEvent.VK_1 + (key - KeyEvent.VK_NUMPAD1);
+				}
 				if (key == KeyEvent.VK_1) {
 					projecao.setParalelProjection();
+					nomeProjecao = "Paralela";
+					perspectiva = false;
 				}
 				if (key == KeyEvent.VK_2) {
 					projecao.setObliqueProjection(1, 45);
+					nomeProjecao = "Cavalier";
+					perspectiva = false;
 				}
 				if (key == KeyEvent.VK_3) {
 					projecao.setObliqueProjection(0.5f, 30);
+					nomeProjecao = "Cabinet";
+					perspectiva = false;
+				}
+				if (key == KeyEvent.VK_4) {
+					perspectiva = true;
+					setaPerspectiva();
+				}
+				// R aproxima o centro de projecao (mais distorcao), F afasta
+				if (key == KeyEvent.VK_R && perspectiva) {
+					distanciaPerspectiva = Math.max(50, distanciaPerspectiva-50);
+					setaPerspectiva();
+				}
+				if (key == KeyEvent.VK_F && perspectiva) {
+					distanciaPerspectiva += 50;
+					setaPerspectiva();
 				}
 			}
 
@@ -231,7 +266,7 @@ public class MainCanvas extends JPanel implements Runnable{
 
 			@Override
 			public void mousePressed(MouseEvent e) {
-				// TODO Auto-generated method stub
+				requestFocusInWindow(); // clicar no painel devolve o foco do teclado para ele
 				clickX = e.getX();
 				clickY = e.getY();
 				
@@ -270,6 +305,15 @@ public class MainCanvas extends JPanel implements Runnable{
 			public void mouseClicked(MouseEvent e) {
 				// TODO Auto-generated method stub
 
+			}
+		});
+
+		addComponentListener(new ComponentAdapter() {
+			@Override
+			public void componentResized(ComponentEvent e) {
+				if (perspectiva) {
+					setaPerspectiva(); // mantem o ponto de fuga no centro da janela
+				}
 			}
 		});
 
@@ -313,6 +357,26 @@ public class MainCanvas extends JPanel implements Runnable{
 		
 	}
 	
+	// A matriz de perspectiva coloca o centro de projecao sobre a origem (0,0),
+	// que na tela e o canto superior esquerdo. Para o ponto de fuga ficar no meio
+	// da tela: leva o centro da tela para a origem, projeta e traz de volta.
+	private void setaPerspectiva() {
+		float cx = getWidth()/2;
+		float cy = getHeight()/2;
+
+		Mat4x4 paraOrigem = new Mat4x4();
+		paraOrigem.setTranslate(-cx, -cy, 0);
+
+		Mat4x4 per = new Mat4x4();
+		per.setPerspectiveProjection(distanciaPerspectiva);
+
+		Mat4x4 volta = new Mat4x4();
+		volta.setTranslate(cx, cy, 0);
+
+		projecao = projecao.multiplicaMatrizes(volta, projecao.multiplicaMatrizes(per, paraOrigem));
+		nomeProjecao = "Perspectiva d="+(int)distanciaPerspectiva;
+	}
+
 	private void criaCubo(float x,float y, float z, float lx,float ly, float lz) {
 		Ponto3D p1 = new Ponto3D(x, y, z);
 		Ponto3D p2 = new Ponto3D(x+lx, y, z);
@@ -548,25 +612,30 @@ public class MainCanvas extends JPanel implements Runnable{
 	public void simulaMundo(long diftime){
 		
 		float difS = diftime/1000.0f;
-		float vel = 50;
-		
+		float vel = 200; // pixels por segundo
+
 		timer+=diftime;
-		
+
 		if(UP || DOWN || LEFT || RIGHT) {
-			Mat4x4 matrot = new Mat4x4();
+			// deslocamento proporcional ao tempo do quadro: a ~1000 FPS,
+			// 1 pixel por quadro jogava a cena para fora da tela num instante
+			float dx = 0;
+			float dy = 0;
 			if (UP) {
-				matrot.setTranslate(0, -1,0);
+				dy -= vel*difS;
 			}
 			if (DOWN) {
-				matrot.setTranslate(0, +1,0);
+				dy += vel*difS;
 			}
 			if (LEFT) {
-				matrot.setTranslate(-1, 0,0);
+				dx -= vel*difS;
 			}
 			if (RIGHT) {
-				matrot.setTranslate(+1, 0,0);
+				dx += vel*difS;
 			}
-	
+			Mat4x4 matrot = new Mat4x4();
+			matrot.setTranslate(dx, dy, 0);
+
 			Mat4x4 mr = modelview.multiplicaMatrizes(matrot,modelview);
 			modelview = mr;
 		}
@@ -602,7 +671,7 @@ public class MainCanvas extends JPanel implements Runnable{
 		g.setFont(f);
 		
 		g.setColor(Color.white);
-		g.fillRect(0, 0, 800, 600);
+		g.fillRect(0, 0, getWidth(), getHeight());
 		
 		g.setColor(Color.blue);
 		g.fillRect(eixoX-2, eixoY-2, 5, 5);
@@ -635,6 +704,11 @@ public class MainCanvas extends JPanel implements Runnable{
 		
 		g.setColor(Color.black);
 		g.drawString("FPS "+fps+" mouse: "+mouseX+","+mouseY, 10, 25);
+		g.drawString("Projecao: "+nomeProjecao, 10, getHeight()-15);
+
+		g.setFont(fAjuda);
+		g.drawString("1 Paralela | 2 Cavalier | 3 Cabinet | 4 Perspectiva (R/F muda d)", 10, getHeight()-70);
+		g.drawString("WASD move | Q/E gira | Z/X escala | Espaco reinicia a cena", 10, getHeight()-52);
 	}
 	
 	public void desenhaLinhaHorizontal(int x, int y,int w) {
@@ -688,7 +762,7 @@ public class MainCanvas extends JPanel implements Runnable{
 		long diftime = 0;
 		while(ativo){
 			simulaMundo(diftime);
-			paintImmediately(0, 0, 640, 480);
+			paintImmediately(0, 0, getWidth(), getHeight()); // janela inteira, mesmo maximizada
 			paintcounter+=100;
 			
 			try {
